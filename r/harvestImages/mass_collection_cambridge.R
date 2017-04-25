@@ -18,10 +18,6 @@ s <- shapefile("shp/buildings_with_centroids.shp")
 # get an intital set of 360 endpoints in a 50m radius
 ep <- createEndpoints(50, 360)
 
-# get a list of all pictures that have already been taken
-done <- list.files( photo.dir )
-# remove the pano information
-done <- gsub("_.+$","",done, perl=TRUE)
 
 
 # Create a sample for mid-sized homes
@@ -31,11 +27,26 @@ for(i in 1:nrow(s)){
 }
 samp <- subset(s, area > 40 & area < 200)
 
-# randomly draw 2000 buildings
-sampl <- samp[sample(1:nrow(samp), 2000, replace=FALSE),]
-for(i in 1:nrow(sampl)){
-  if(! sampl$TOID[i] %in% done){ 
-    getMugShot(sampl$TOID[i], s, plot=FALSE, fov.ratio=1.3, endpoints=ep)
+
+
+
+# loop through all buildings
+while(TRUE){
+  # get a list of all pictures that have already been taken
+  done <- list.files( photo.dir )
+  # remove the pano information
+  done <- gsub("_.+$","",done, perl=TRUE)
+  
+  # only keep those that have not been downloaded yet
+  samp <- samp[ ! samp$TOID %in% done,]
+  
+  # sample a few hundred
+  sampl <- samp[sample(1:nrow(samp), 200, replace=FALSE),]
+  for(i in 1:nrow(sampl)){
+    if(! sampl$TOID[i] %in% done){ 
+      getMugShot(sampl$TOID[i], s, plot=FALSE, fov.ratio=1.3, endpoints=ep)
+    }
+    print(i)
   }
-  print(i)
+  # and do this again...
 }
