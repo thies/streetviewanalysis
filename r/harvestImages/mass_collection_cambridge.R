@@ -13,7 +13,7 @@ photo.dir <- "photos/cambridge/"
 pano.dir <- "streetview/panoramas/"
 
 # load shapefile
-s <- shapefile("shp/buildings_with_centroids.shp")
+s <- shapefile("shp/buildings_with_centroids_area.shp")
 
 # get an intital set of 360 endpoints in a 50m radius
 ep <- createEndpoints(50, 360)
@@ -21,13 +21,11 @@ ep <- createEndpoints(50, 360)
 
 
 # Create a sample for mid-sized homes
-s$area <- NA
-for(i in 1:nrow(s)){
-  s$area[i] <- area( s[i,] )
-}
+#s$area <- NA
+#for(i in 1:nrow(s)){
+#  s$area[i] <- area( s[i,] )
+#}
 samp <- subset(s, area > 40 & area < 200)
-
-
 
 
 # loop through all buildings
