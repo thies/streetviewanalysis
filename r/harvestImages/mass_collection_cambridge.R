@@ -4,7 +4,11 @@
 setwd("~/research/streetview.address/")
 source("~/research/streetviewanalysis/r/harvestImages/functions_mugshots.R")
 
-api.key <- "AIzaSyDgKKGNom-pZqDlZo_i4ZTE4_bWfig7d4c"
+# Add your own API key here!
+source("~/.api.key.R")
+# api.key <- ""
+
+
 photo.dir <- "photos/cambridge/"
 pano.dir <- "streetview/panoramas/"
 
@@ -13,9 +17,6 @@ s <- shapefile("shp/buildings_with_centroids.shp")
 
 # get an intital set of 360 endpoints in a 50m radius
 ep <- createEndpoints(50, 360)
-
-
-homeTOID <- "0001000010142211"
 
 # get a list of all pictures that have already been taken
 done <- list.files( photo.dir )

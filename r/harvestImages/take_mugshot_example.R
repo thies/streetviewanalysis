@@ -1,7 +1,10 @@
 setwd("~/research/streetview.address")
 source("~/research/streetviewanalysis/r/harvestImages/functions_mugshots.R")
 
-api.key <- "AIzaSyDgKKGNom-pZqDlZo_i4ZTE4_bWfig7d4c"
+# Add your own API key here!
+source("~/.api.key.R")
+# api.key <- ""
+
 photo.dir <- "photos/cambridge/"
 pano.dir <- "streetview/panoramas/"
 
