@@ -1,5 +1,5 @@
-setwd("~/research/streetview.address/")
-source("R code/functions_mugshots.R")
+setwd("~/research/streetview.address")
+source("~/research/streetviewanalysis/r/harvestImages/functions_mugshots.R")
 
 api.key <- "AIzaSyDgKKGNom-pZqDlZo_i4ZTE4_bWfig7d4c"
 photo.dir <- "photos/cambridge/"
