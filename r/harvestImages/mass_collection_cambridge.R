@@ -1,24 +1,30 @@
+# Find user to assign working directories
+user.name <- Sys.info()[which(names(Sys.info())=='user')]
+
 # collect mugshots for all of Cambridge
-
-
-setwd("~/research/streetview.address/")
-source("~/research/streetviewanalysis/r/harvestImages/functions_mugshots.R")
-
-# Add your own API key here!
-source("~/.api.key.R")
-# api.key <- ""
-
-
-photo.dir <- "photos/cambridge/"
-pano.dir <- "streetview/panoramas/"
+if (user.name != 'ejohnso4'){
+    setwd("~/research/streetview.address/")
+    source("~/research/streetviewanalysis/r/harvestImages/functions_mugshots.R")
+    # Add your own API key here!
+    source("~/.api.key.R")
+    # api.key <- ""
+    photo.dir <- "photos/cambridge/"
+    pano.dir <- "streetview/panoramas/"
+    shp.file <- "shp/buildings_with_centroids_area.shp"
+} else {
+    setwd("~/GitHub/streetviewanalysis/")   
+    source("~/GitHub/streetviewanalysis/r/harvestImages/functions_mugshots.R")
+    source("~/api.key.R")
+    photo.dir <- "~/Dropbox/cambridge/"
+    pano.dir <- "~/Dropbox/panoramas/"
+    shp.file <- "~/Dropbox/shp/buildings_with_centroids_area.shp"
+}
 
 # load shapefile
-s <- shapefile("shp/buildings_with_centroids_area.shp")
+s <- shapefile(shp.file)
 
 # get an intital set of 360 endpoints in a 50m radius
 ep <- createEndpoints(50, 360)
-
-
 
 # Create a sample for mid-sized homes
 #s$area <- NA
@@ -26,7 +32,6 @@ ep <- createEndpoints(50, 360)
 #  s$area[i] <- area( s[i,] )
 #}
 samp <- subset(s, area > 40 & area < 200)
-
 
 # loop through all buildings
 while(TRUE){
@@ -41,11 +46,10 @@ while(TRUE){
   # sample a few hundred
   sampl <- samp[sample(1:nrow(samp), 200, replace=FALSE),]
   for(i in 1:nrow(sampl)){
-    getMugShot(sampl$TOID[i], s, plot=FALSE, fov.ratio=1.3, endpoints=ep)
-
-    # A little update on progress...
-    totaldone <- length(done)+i
-    print(c(i, totaldone, paste(round(totaldone/nrow(s), 3)*100, '%', sep="") ))
+    if(! sampl$TOID[i] %in% done){ 
+      getMugShot(sampl$TOID[i], s, plot=FALSE, fov.ratio=1.3, endpoints=ep)
+    }
+    print(i)
   }
   # and do this again...
 }
