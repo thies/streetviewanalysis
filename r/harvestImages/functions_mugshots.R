@@ -9,11 +9,8 @@ library(geosphere)
 library(raster)
 library(rjson)
 
-
 p4string.UK <- "+proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +datum=OSGB36 +units=m +no_defs +ellps=airy +towgs84=446.448,-125.157,542.060,0.1502,0.2470,0.8421,-20.4894"
 p4string.WGS84 <- "+init=epsg:4326 +proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"
-
-
 
 #============ Some Helpers
 # Create a set of 360 points, evenly distributed around the origin
@@ -26,8 +23,8 @@ createEndpoints <- function( radius=50, numpoints=360){
     ang <- (2* pi) * (a / numpoints)
     endpoints[[ a+1 ]] <- c( endpoints[[1]][1] *cos(ang) - endpoints[[1]][2] *sin(ang),  endpoints[[1]][2] *cos(ang) + endpoints[[1]][1] *sin(ang), ang )
   }
-  ep <- as.data.frame( do.call( rbind, endpoints ))
-  colnames(ep) <- c("lon","lat", "rad")
+  # 
+  ep <- rbindlist(lapply(endpoints, function(x) data.table(lon=x[1], lat=x[2], rad=x[3])))
   return(ep)
 }
 # -------------------------------------
