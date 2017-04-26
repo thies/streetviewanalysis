@@ -39,7 +39,7 @@ while(TRUE){
   samp <- samp[ ! samp$TOID %in% done,]
   
   # sample a few hundred
-  sampl <- samp[sample(1:nrow(samp), 200, replace=FALSE),]
+  sampl <- samp[sample(1:nrow(samp), 100, replace=FALSE),]
   for(i in 1:nrow(sampl)){
     getMugShot(sampl$TOID[i], s, plot=FALSE, fov.ratio=1.3, endpoints=ep)
 
