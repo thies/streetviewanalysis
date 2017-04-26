@@ -11,6 +11,7 @@ if (user.name != 'ejohnso4'){
     photo.dir <- "photos/cambridge/"
     pano.dir <- "streetview/panoramas/"
     shp.file <- "shp/buildings_with_centroids_area.shp"
+    osm.dir <- "shp/osm.cambridge/cambridgeshire-latest-free.shp/"
 } else {
     setwd("~/GitHub/streetviewanalysis/")   
     source("~/GitHub/streetviewanalysis/r/harvestImages/functions_mugshots.R")
@@ -18,8 +19,9 @@ if (user.name != 'ejohnso4'){
     photo.dir <- "~/Dropbox/cambridge/"
     pano.dir <- "~/Dropbox/panoramas/"
     shp.file <- "~/Dropbox/shp/buildings_with_centroids_area.shp"
+    osm.dir <- "/Users/ejohnso4/Dropbox/shp/osm.cambridge/cambridgeshire-latest-free.shp/"
 }
-
+osm.location <- paste0(osm.dir, 'osm.cambridge.rdata')
 # load shapefile
 s <- shapefile(shp.file)
 
@@ -47,7 +49,7 @@ while(TRUE){
   sampl <- samp[sample(1:nrow(samp), 200, replace=FALSE),]
   for(i in 1:nrow(sampl)){
     if(! sampl$TOID[i] %in% done){ 
-      getMugShot(sampl$TOID[i], s, plot=FALSE, fov.ratio=1.3, endpoints=ep)
+      getMugShot(sampl$TOID[i], s, plot=FALSE, fov.ratio=1.3, endpoints=ep, api.key=api.key)
     }
     print(i)
   }
