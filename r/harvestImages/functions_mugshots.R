@@ -71,13 +71,8 @@ getPanorama <- function( x, api.key, savePano=TRUE ){
 }
 # ================ End Helpers
 
-
-
-
-
-
 # This is where stuff really happens 
-getMugShot <- function(toid, s, plot=FALSE, fov.ratio=1, subset.radius=70, endpoints, fov=NA, fDest=NA, savePano=TRUE){
+getMugShot <- function(toid, s, plot=FALSE, fov.ratio=1, subset.radius=70, endpoints=NA, fov=NA, fDest=NA, savePano=TRUE, api.key){
 
   h <- subset(s, TOID == toid)
   
@@ -92,6 +87,8 @@ getMugShot <- function(toid, s, plot=FALSE, fov.ratio=1, subset.radius=70, endpo
   # subset polygons from close surroundings
   # this is just to speed up things...
   s_sub <- subset(s, abs(centrX-s$centrX[ s$TOID== toid]) < subset.radius & abs(centrY-s$centrY[ s$TOID== toid ]) < subset.radius ) 
+  # Reproject s_sub to match the pano projection below
+  s_sub <- spTransform(s_sub, CRS("+init=epsg:27700"))
   
   if(plot){
     plot(s_sub)
@@ -101,7 +98,7 @@ getMugShot <- function(toid, s, plot=FALSE, fov.ratio=1, subset.radius=70, endpo
 
   # find panorama that is closest to this centroid
   pan <- getPanorama( centr.wgs84, api.key, savePano )
-  if( is.na(pan[[1]]) ){ return(" NO PANORAMA FOUND ")}
+  if( is.na(pan[[2]][[2]][1]) ){ return(" NO PANORAMA FOUND ")}
   pano.wgs84 <- pan[[1]]
   panorama <- pan[[2]]
   pano <- spTransform(pano.wgs84, CRS("+init=epsg:27700"))
@@ -120,7 +117,6 @@ getMugShot <- function(toid, s, plot=FALSE, fov.ratio=1, subset.radius=70, endpo
   fhdf$lon <- linesofsight$lon
   fhdf$lat <- linesofsight$lat
   
-    
   # focus on lines of sight to the building
   goodangles <- subset(fhdf, id == toid)
   if(nrow(goodangles) > 0){
