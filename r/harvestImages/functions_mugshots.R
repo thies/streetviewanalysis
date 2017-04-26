@@ -54,6 +54,11 @@ firstHit <- function(line, pano, poly){
   }
 }
 
+funRoads <- function(){
+    # This function builds the road database
+    
+}
+
 getPanorama <- function( x, api.key, savePano=TRUE ){
   # find panorama that is closest to this centroid
   api.url <- paste("https://maps.googleapis.com/maps/api/streetview/metadata?size=600x300&location=", paste(rev(coordinates( x )), collapse=",") ,"&key=",api.key, sep="")
@@ -69,6 +74,7 @@ getPanorama <- function( x, api.key, savePano=TRUE ){
     return(list(NA,NA))
   }
 }
+
 # ================ End Helpers
 
 # This is where stuff really happens 
@@ -103,7 +109,6 @@ getMugShot <- function(toid, s, plot=FALSE, fov.ratio=1, subset.radius=70, endpo
   panorama <- pan[[2]]
   pano <- spTransform(pano.wgs84, CRS("+init=epsg:27700"))
   
-  
   # Find out, which directection the camera should aim
   # How much of the building is visible from the pano position?
   # look in each of the 360 degree directions, and see if one can see the house unobstructed
@@ -112,6 +117,7 @@ getMugShot <- function(toid, s, plot=FALSE, fov.ratio=1, subset.radius=70, endpo
   linesofsight$lat <- linesofsight$lat+coordinates(pano)[2]
   losCoords <- paste(linesofsight$lon, linesofsight$lat)
   los <- lapply(losCoords, function(x,y,z){ readWKT(paste("LINESTRING(", paste( y, collapse=" ")," , ", x,")"), p4s=z) }, coordinates(pano), p4string.UK)
+  los <- lapply(los, spTransform, CRS("+init=epsg:27700"))
   fh <- lapply( los, firstHit, pano, s_sub)
   fhdf <- as.data.frame( do.call(rbind, fh), stringsAsFactors=FALSE)
   fhdf$lon <- linesofsight$lon
@@ -146,10 +152,60 @@ getMugShot <- function(toid, s, plot=FALSE, fov.ratio=1, subset.radius=70, endpo
       fDest <- paste(photo.dir, toid, "_", panorama$pano_id,".jpg", sep="")
     }
     # download the picture from Streetview API
+
     streetShot <- download.file(shotLoc, fDest)
+    
     return(fDest)
   } else {
     return("no direct line of sight")
   }
+}
+funOsm <- function(){
+    # Load Buildings
+    if (!file.exists(osm.location)){
+        osm <- list()
+        osm$build <- readOGR(dsn=osm.dir, layer = 'gis.osm_buildings_a_free_1', verbose = FALSE)
+        osm$road <- readOGR(dsn=osm.dir, layer = 'gis.osm_roads_free_1', verbose = FALSE)
+        road.fclass.exclude <- c('footway', 'service',
+                                 'cycleway', 'living_street', 'path', 'pedestrian')
+        osm$road <- osm$road[!(osm$road$fclass %in% road.fclass.exclude),]
+        osm <- lapply(osm, spTransform, CRS("+init=epsg:27700"))
+        save(osm, file=osm.location)
+    } else {
+        load(osm.location)
+    }
+    return(osm)
+}
+getPanoIds <- function(s, plot=FALSE, savePano = TRUE, api.key){
+    s.ids <- s@data$TOID
+    load('~/Dropbox/panorama.db/panos.rdata')
+    panos.done <- panos$shp.id
+    panos.bad <- s.ids[!(s.ids %in% panos.done)]
+    # panos <- lapply(panos.bad, function(x) file.remove(paste0('~/Dropbox/panorama.db/',x,".rds")))
+    panoIds <- lapply(panos.bad, function(x) getPanoIds.run(x, s, api.key))
+    panos.2 <- rbindlist(panoIds, use.names = TRUE, fill = TRUE)
+    save(panos.2, file='~/Dropbox/panorama.db/panos.2.rdata')
+    # Find unique panoIds
+}
+getPanoIds.run <-function(toid, s, api.key){
+    s.i <- s[s@data$TOID==toid,]
+    pano.loc <- paste0('~/Dropbox/panorama.db/',toid,".rds")
+    if (file.exists(pano.loc)){
+        panorama <- readRDS(pano.loc)
+    } else {
+        
+        centr <- gCentroid(s.i)
+        centr.wgs84 <- spTransform(centr, CRS("+init=epsg:4326"))
+        api.url <- paste("https://maps.googleapis.com/maps/api/streetview/metadata?size=600x300&location=",
+                         paste(rev(coordinates(centr.wgs84)), collapse=",") ,"&key=",api.key, sep="")
+        panorama <- unlist(fromJSON(file=api.url))
+        
+        panorama <- data.table(t(panorama), shp.id = toid)
+        if (which(s@data$TOID==toid) %% 100 == 0){
+            cat(paste(toid,  round(which(s@data$TOID==toid)/length(s),4)),sep='\n')
+        }
+        saveRDS(panorama, file=pano.loc)
+    }
+    return(panorama)
 }
 
