@@ -8,6 +8,7 @@ library(rgdal)
 library(geosphere)
 library(raster)
 library(rjson)
+library(parallel)
 
 p4string.UK <- "+proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +datum=OSGB36 +units=m +no_defs +ellps=airy +towgs84=446.448,-125.157,542.060,0.1502,0.2470,0.8421,-20.4894"
 p4string.WGS84 <- "+init=epsg:4326 +proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"
@@ -78,7 +79,7 @@ getPanorama <- function( x, api.key, savePano=TRUE ){
 # ================ End Helpers
 
 # This is where stuff really happens 
-getMugShot <- function(toid, s, plot=FALSE, fov.ratio=1, subset.radius=70, endpoints=NA, fov=NA, fDest=NA, savePano=TRUE, api.key){
+getMugShot <- function(toid, s, plot=FALSE, fov.ratio=1, subset.radius=70, endpoints=NA, fov=NA, fDest=NA, savePano=TRUE, api.key, cores=1){
 
   h <- subset(s, TOID == toid)
   
@@ -116,9 +117,9 @@ getMugShot <- function(toid, s, plot=FALSE, fov.ratio=1, subset.radius=70, endpo
   linesofsight$lon <- linesofsight$lon+coordinates(pano)[1]
   linesofsight$lat <- linesofsight$lat+coordinates(pano)[2]
   losCoords <- paste(linesofsight$lon, linesofsight$lat)
-  los <- lapply(losCoords, function(x,y,z){ readWKT(paste("LINESTRING(", paste( y, collapse=" ")," , ", x,")"), p4s=z) }, coordinates(pano), p4string.UK)
-  los <- lapply(los, spTransform, CRS("+init=epsg:27700"))
-  fh <- lapply( los, firstHit, pano, s_sub)
+  los <- mclapply(losCoords, function(x,y,z){ readWKT(paste("LINESTRING(", paste( y, collapse=" ")," , ", x,")"), p4s=z) }, coordinates(pano), p4string.UK, mc.cores=cores)
+  los <- mclapply(los, spTransform, CRS("+init=epsg:27700"), mc.cores=cores)
+  fh <- mclapply( los, firstHit, pano, s_sub, mc.cores = cores)
   fhdf <- as.data.frame( do.call(rbind, fh), stringsAsFactors=FALSE)
   fhdf$lon <- linesofsight$lon
   fhdf$lat <- linesofsight$lat
