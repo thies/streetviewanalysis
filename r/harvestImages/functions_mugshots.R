@@ -82,11 +82,9 @@ getPanorama <- function( x, api.key, savePano=TRUE ){
 getMugShot <- function(toid, s, plot=FALSE, fov.ratio=1, subset.radius=70, endpoints=NA, fov=NA, fDest=NA, savePano=TRUE, api.key, cores=1){
 
   h <- subset(s, TOID == toid)
-  
-  if(is.na(endpoints)){
+  if(is.na(endpoints[1,1])){
     endpoints <- createEndpoints(50, 360)
   }
-    
   # find centroid of home
   centr <- gCentroid( h )
   centr.wgs84 <- spTransform(centr, CRS("+init=epsg:4326"))
@@ -110,19 +108,26 @@ getMugShot <- function(toid, s, plot=FALSE, fov.ratio=1, subset.radius=70, endpo
   panorama <- pan[[2]]
   pano <- spTransform(pano.wgs84, CRS("+init=epsg:27700"))
   
-  # Find out, which directection the camera should aim
+  # Find out, which direction the camera should aim
   # How much of the building is visible from the pano position?
   # look in each of the 360 degree directions, and see if one can see the house unobstructed
   linesofsight <- endpoints
   linesofsight$lon <- linesofsight$lon+coordinates(pano)[1]
   linesofsight$lat <- linesofsight$lat+coordinates(pano)[2]
   losCoords <- paste(linesofsight$lon, linesofsight$lat)
-  los <- mclapply(losCoords, function(x,y,z){ readWKT(paste("LINESTRING(", paste( y, collapse=" ")," , ", x,")"), p4s=z) }, coordinates(pano), p4string.UK, mc.cores=cores)
+  
+  cores <- detectCores() - 1
+  start.time <- Sys.time()
+  los <- mclapply(losCoords, function(x,y,z){ readWKT(paste("LINESTRING(", paste( y, collapse=" ")," , ", x,")"), p4s=z) },
+                  coordinates(pano), p4string.UK, mc.cores=cores)
   los <- mclapply(los, spTransform, CRS("+init=epsg:27700"), mc.cores=cores)
   fh <- mclapply( los, firstHit, pano, s_sub, mc.cores = cores)
+  #fh <- lapply( los, firstHit, pano, s_sub)
   fhdf <- as.data.frame( do.call(rbind, fh), stringsAsFactors=FALSE)
   fhdf$lon <- linesofsight$lon
   fhdf$lat <- linesofsight$lat
+  end.time <- Sys.time()
+  cat(end.time - start.time)
   
   # focus on lines of sight to the building
   goodangles <- subset(fhdf, id == toid)
