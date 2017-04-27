@@ -103,7 +103,7 @@ getMugShot <- function(toid, s, plot=FALSE, fov.ratio=1, subset.radius=70, endpo
 
   # find panorama that is closest to this centroid
   pan <- getPanorama( centr.wgs84, api.key, savePano )
-  if( is.na(pan[[2]][[2]][1]) ){ return(" NO PANORAMA FOUND ")}
+  if( is.na(pan) ){ return(" NO PANORAMA FOUND ")}
   pano.wgs84 <- pan[[1]]
   panorama <- pan[[2]]
   pano <- spTransform(pano.wgs84, CRS("+init=epsg:27700"))
