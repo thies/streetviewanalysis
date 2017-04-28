@@ -163,7 +163,9 @@ getMugShot <- function(toid, s, plot=FALSE, fov.ratio=1, subset.radius=70, endpo
     
     return(fDest)
   } else {
-    return("no direct line of sight")
+    # Cat to empty file so only run once
+    writeLines(c('No direct line of sight'), fDest)
+    cat("no direct line of sight", fDest)
   }
 }
 funOsm <- function(){
