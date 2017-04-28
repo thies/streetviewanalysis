@@ -158,12 +158,13 @@ getMugShot <- function(toid, s, plot=FALSE, fov.ratio=1, subset.radius=70, endpo
       fDest <- paste(photo.dir, toid, "_", panorama$pano_id,".jpg", sep="")
     }
     # download the picture from Streetview API
-
     streetShot <- download.file(shotLoc, fDest)
-    
     return(fDest)
   } else {
-    return("no direct line of sight")
+    # Cat to empty file so only run once
+    print('NO DIRECT LINE OF SIGHT')
+    fDest <- paste(photo.dir, toid, "_", panorama$pano_id,".jpg", sep="")
+    cat("no direct line of sight", file=fDest)
   }
 }
 funOsm <- function(){
