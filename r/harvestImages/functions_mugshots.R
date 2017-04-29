@@ -80,7 +80,7 @@ getPanorama <- function( x, api.key, savePano=TRUE ){
 
 # This is where stuff really happens 
 getMugShot <- function(toid, s, plot=FALSE, fov.ratio=1, subset.radius=70, endpoints=NA, fov=NA, fDest=NA, savePano=TRUE, api.key, cores=1){
-
+  
   h <- subset(s, TOID == toid)
   if(is.na(endpoints[1,1])){
     endpoints <- createEndpoints(50, 360)
@@ -100,7 +100,7 @@ getMugShot <- function(toid, s, plot=FALSE, fov.ratio=1, subset.radius=70, endpo
     plot(h, col="red", add=TRUE)
     points(centr, col="blue")
   }
-
+  
   # find panorama that is closest to this centroid
   pan <- getPanorama( centr.wgs84, api.key, savePano )
   if( is.na(pan) ){ return(" NO PANORAMA FOUND ")}
@@ -117,7 +117,8 @@ getMugShot <- function(toid, s, plot=FALSE, fov.ratio=1, subset.radius=70, endpo
   losCoords <- paste(linesofsight$lon, linesofsight$lat)
   
   cores <- detectCores() - 1
-  start.time <- Sys.time()
+  if (Sys.info()[which(names(Sys.info())=='user')]=='ejohnso4') cores <- 1
+  #start.time <- Sys.time()
   los <- mclapply(losCoords, function(x,y,z){ readWKT(paste("LINESTRING(", paste( y, collapse=" ")," , ", x,")"), p4s=z) },
                   coordinates(pano), p4string.UK, mc.cores=cores)
   los <- mclapply(los, spTransform, CRS("+init=epsg:27700"), mc.cores=cores)
@@ -126,8 +127,8 @@ getMugShot <- function(toid, s, plot=FALSE, fov.ratio=1, subset.radius=70, endpo
   fhdf <- as.data.frame( do.call(rbind, fh), stringsAsFactors=FALSE)
   fhdf$lon <- linesofsight$lon
   fhdf$lat <- linesofsight$lat
-  end.time <- Sys.time()
-  cat(end.time - start.time)
+  #end.time <- Sys.time()
+  #cat(end.time - start.time)
   
   # focus on lines of sight to the building
   goodangles <- subset(fhdf, id == toid)
@@ -153,7 +154,7 @@ getMugShot <- function(toid, s, plot=FALSE, fov.ratio=1, subset.radius=70, endpo
                       '&heading=', heading, 
                       '&fov=',fov,
                       '&pitch=-0.76&key=', api.key)
-
+    
     if(is.na(fDest)){
       fDest <- paste(photo.dir, toid, "_", panorama$pano_id,".jpg", sep="")
     }
@@ -162,9 +163,9 @@ getMugShot <- function(toid, s, plot=FALSE, fov.ratio=1, subset.radius=70, endpo
     return(fDest)
   } else {
     # Cat to empty file so only run once
-    print('NO DIRECT LINE OF SIGHT')
     fDest <- paste(photo.dir, toid, "_", panorama$pano_id,".jpg", sep="")
     cat("no direct line of sight", file=fDest)
+    print('NO DIRECT LINE OF SIGHT')
   }
 }
 funOsm <- function(){
