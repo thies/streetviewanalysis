@@ -61,8 +61,9 @@ while(TRUE){
   for(i in 1:nrow(sampl)){
     if(! sampl$TOID[i] %in% done){ 
       try(getMugShot(sampl$TOID[i], s, plot=FALSE, fov.ratio=1.3, endpoints=ep, api.key=api.key))
+    } else {
+      print(paste0(sampl$TOID[i], ':  already done'))
     }
-    print(i)
   }
   # and do this again...
 }
