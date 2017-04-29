@@ -162,11 +162,11 @@ getMugShot <- function(toid, s, plot=FALSE, fov.ratio=1, subset.radius=70, endpo
     streetShot <- download.file(shotLoc, fDest)
     return(fDest)
   } else {
-    # Cat to empty file so only run once
+    # Cat to empty file so only run onc
     fDest <- paste(photo.dir, toid, "_", panorama$pano_id,".jpg", sep="")
     cat("no direct line of sight", file=fDest)
     print('NO DIRECT LINE OF SIGHT')
-  }
+    }
 }
 funOsm <- function(){
     # Load Buildings
