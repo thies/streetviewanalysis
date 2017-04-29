@@ -72,7 +72,7 @@ getPanorama <- function( x, api.key, savePano=TRUE ){
     }
   return( list( pano.wgs84, panorama ))
   } else {
-    return(list(NA,NA))
+    return(list(NA,panorama))
   }
 }
 
@@ -103,7 +103,12 @@ getMugShot <- function(toid, s, plot=FALSE, fov.ratio=1, subset.radius=70, endpo
   
   # find panorama that is closest to this centroid
   pan <- getPanorama( centr.wgs84, api.key, savePano )
-  if( is.na(pan) ){ return(" NO PANORAMA FOUND ")}
+  if( pan[[2]]$status != 'OK') {
+    # exit here if no panorama was found
+    fDest <- paste(photo.dir, toid, "_nopanorama.txt", sep="")
+    cat( pan[[2]]$status , file=fDest)
+    return( pan[[2]]$status )
+  }
   pano.wgs84 <- pan[[1]]
   panorama <- pan[[2]]
   pano <- spTransform(pano.wgs84, CRS("+init=epsg:27700"))
@@ -163,9 +168,9 @@ getMugShot <- function(toid, s, plot=FALSE, fov.ratio=1, subset.radius=70, endpo
     return(fDest)
   } else {
     # Cat to empty file so only run onc
-    fDest <- paste(photo.dir, toid, "_", panorama$pano_id,".jpg", sep="")
+    fDest <- paste(photo.dir, toid, "_nolineofsight.txt", sep="")
     cat("no direct line of sight", file=fDest)
-    print('NO DIRECT LINE OF SIGHT')
+    return('NO DIRECT LINE OF SIGHT')
     }
 }
 funOsm <- function(){
