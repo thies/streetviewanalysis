@@ -235,7 +235,7 @@ getMugShot <- function(toid, s, plot=FALSE, fov.ratio=1, subset.radius=70, endpo
     # Cat to empty file so only run onc
     fDest <- paste(photo.dir, toid, "_nolineofsight.txt", sep="")
     cat("no direct line of sight", file=fDest)
-    return('NO DIRECT LINE OF SIGHT')
+    print(paste0('NO DIRECT LINE OF SIGHT', fDest))
     }
 }
 funOsm <- function(){
