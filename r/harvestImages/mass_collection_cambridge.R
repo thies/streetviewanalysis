@@ -44,7 +44,7 @@ ep <- createEndpoints(50, 360)
 #for(i in 1:nrow(s)){
 #  s$area[i] <- area( s[i,] )
 #}
-samp <- subset(s, area > 30 & area < 200)
+samp <- subset(s, area > 30 & area < 210)
 
 # loop through all buildings
 while(TRUE){

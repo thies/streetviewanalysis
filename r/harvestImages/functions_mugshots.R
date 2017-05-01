@@ -55,6 +55,22 @@ firstHit <- function(line, pano, poly){
   }
 }
 
+firstHitRecursive <- function( d, pano, poly ){
+  fh[[ d ]] <- firstHit(los[[d]], pano, poly)
+  if(!is.na( fh[[ d ]][1] )){
+    if(d>1){
+      fh[[ (d-1) ]] <- fhfirstHitRecursive( (d-1), pano, poly )
+    }
+    if(d<360){
+      fh[[ d+1 ]] <- firstHitRecursive( (d+1), pano, poly )
+    }
+   return(TRUE)
+  }
+  return(FALSE)
+}
+  
+
+
 funRoads <- function(){
     # This function builds the road database
     
@@ -127,8 +143,57 @@ getMugShot <- function(toid, s, plot=FALSE, fov.ratio=1, subset.radius=70, endpo
   los <- mclapply(losCoords, function(x,y,z){ readWKT(paste("LINESTRING(", paste( y, collapse=" ")," , ", x,")"), p4s=z) },
                   coordinates(pano), p4string.UK, mc.cores=cores)
   los <- mclapply(los, spTransform, CRS("+init=epsg:27700"), mc.cores=cores)
-  fh <- mclapply( los, firstHit, pano, s_sub, mc.cores = cores)
-  #fh <- lapply( los, firstHit, pano, s_sub)
+  
+  # ==================== 
+  # Trying to pre-scan which LOS might hit the home
+  # - then move from there
+  # - this should speed up things
+  deg <- 1:360
+  dseq <- unique( c( deg[deg %% 180 == 0], deg[deg %% 90 == 0], deg[deg %% 30 == 0], deg[deg %% 10 == 0], deg[deg %% 3 == 0], deg))
+  fh <- as.list(rep(NA, length( los )))
+  # implementing a primitive queue
+  queue <- list()
+  # and search for the first hit
+  for( d in dseq){
+    fh[[d]] <- firstHit( los[[ d ]], pano, s_sub )
+    if(  ! is.na(fh[[d]][1] )){
+      if( fh[[d]][1] == toid ){
+        if(d>1){
+          queue[[ length(queue)+1 ]] <- (d-1)
+        } 
+        if(d < 360){
+          queue[[ length(queue)+1 ]] <- (d+1)
+        } 
+        done <- d
+        break
+      }
+    }
+  }
+  # work through the queue
+  while(length( queue ) >= 1){
+    # take first element of queue
+    qe <- queue[[1]]
+    fh[[ qe ]] <- firstHit( los[[ qe ]], pano, s_sub )
+    if( ! is.na(fh[[ qe ]][1] )){
+      if( fh[[ qe ]][1] == toid ){
+        if( qe > 1 & ( ! (qe-1) %in% done ) ){
+          queue[[ length(queue)+1 ]] <- (qe -1 )
+        } 
+        if( qe < 360 & ( ! (qe+1) %in% done) ){
+          queue[[ length(queue)+1 ]] <- (qe+1)
+          } 
+      }  
+    }
+    # remove from queue when done
+    done <- c(done, qe)
+    queue[[1]] <- NULL
+  }
+  # ============================
+  
+  # Former brute force solution
+  #fh <- mclapply( los, firstHit, pano, s_sub, mc.cores = cores)
+  
+
   fhdf <- as.data.frame( do.call(rbind, fh), stringsAsFactors=FALSE)
   fhdf$lon <- linesofsight$lon
   fhdf$lat <- linesofsight$lat
