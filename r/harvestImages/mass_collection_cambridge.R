@@ -44,7 +44,7 @@ ep <- createEndpoints(50, 360)
 #for(i in 1:nrow(s)){
 #  s$area[i] <- area( s[i,] )
 #}
-samp <- subset(s, area > 40 & area < 200)
+samp <- subset(s, area > 30 & area < 210)
 
 # loop through all buildings
 while(TRUE){
@@ -59,11 +59,8 @@ while(TRUE){
   # sample a few hundred
   sampl <- samp[sample(1:nrow(samp), 100, replace=FALSE),]
   for(i in 1:nrow(sampl)){
-    if(! sampl$TOID[i] %in% done){ 
-      try(getMugShot(sampl$TOID[i], s, plot=FALSE, fov.ratio=1.3, endpoints=ep, api.key=api.key))
-    } else {
-      print(paste0(sampl$TOID[i], ':  already done'))
-    }
+    print(paste("Trying: ", sampl$TOID[i]))
+    print( getMugShot(sampl$TOID[i], s, plot=FALSE, fov.ratio=1.3, endpoints=ep, api.key=api.key))
   }
   # and do this again...
 }
