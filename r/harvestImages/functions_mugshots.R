@@ -256,33 +256,31 @@ funOsm <- function(){
 }
 getPanoIds <- function(s, plot=FALSE, savePano = TRUE, api.key){
     s.ids <- s@data$TOID
-    load('~/Dropbox/panorama.db/panos.rdata')
-    panos.done <- panos$shp.id
-    panos.bad <- s.ids[!(s.ids %in% panos.done)]
     # panos <- lapply(panos.bad, function(x) file.remove(paste0('~/Dropbox/panorama.db/',x,".rds")))
-    panoIds <- lapply(panos.bad, function(x) getPanoIds.run(x, s, api.key))
-    panos.2 <- rbindlist(panoIds, use.names = TRUE, fill = TRUE)
-    save(panos.2, file='~/Dropbox/panorama.db/panos.2.rdata')
+    panos <- mclapply(s.ids, function(x) getPanoIds.run(x, s, api.key), mc.cores = (detectCores()-2))
+    panoIds <- rbindlist(panos, use.names = TRUE, fill = TRUE)
+    save(panosIds, file='~/Dropbox/panorama.db/panoIds.rdata')
+    return(panoIds)
     # Find unique panoIds
 }
 getPanoIds.run <-function(toid, s, api.key){
     s.i <- s[s@data$TOID==toid,]
     pano.loc <- paste0('~/Dropbox/panorama.db/',toid,".rds")
     if (file.exists(pano.loc)){
-        panorama <- readRDS(pano.loc)
+      panorama <- readRDS(pano.loc)
+      if (panorama$status=='OVER_QUERY_LIMIT') file.remove(pano.loc)
     } else {
-        
-        centr <- gCentroid(s.i)
-        centr.wgs84 <- spTransform(centr, CRS("+init=epsg:4326"))
-        api.url <- paste("https://maps.googleapis.com/maps/api/streetview/metadata?size=600x300&location=",
-                         paste(rev(coordinates(centr.wgs84)), collapse=",") ,"&key=",api.key, sep="")
-        panorama <- unlist(fromJSON(file=api.url))
-        
-        panorama <- data.table(t(panorama), shp.id = toid)
-        if (which(s@data$TOID==toid) %% 100 == 0){
-            cat(paste(toid,  round(which(s@data$TOID==toid)/length(s),4)),sep='\n')
-        }
-        saveRDS(panorama, file=pano.loc)
+      centr <- gCentroid(s.i)
+      centr.wgs84 <- spTransform(centr, CRS("+init=epsg:4326"))
+      api.url <- paste("https://maps.googleapis.com/maps/api/streetview/metadata?size=600x300&location=",
+                       paste(rev(coordinates(centr.wgs84)), collapse=",") ,"&key=",api.key, sep="")
+      panorama <- unlist(fromJSON(file=api.url))
+      
+      panorama <- data.table(t(panorama), shp.id = toid)
+      if (which(s@data$TOID==toid) %% 100 == 0){
+        cat(paste(toid,  round(which(s@data$TOID==toid)/length(s),4)),sep='\n')
+      }
+      saveRDS(panorama, file=pano.loc)
     }
     return(panorama)
 }
