@@ -68,14 +68,20 @@ firstHitRecursive <- function( d, pano, poly ){
   }
   return(FALSE)
 }
+coords2points <- function(DT, p4string.WGS84=p4string.WGS84, p4string.UK=p4string.UK ){
+  # Input file:
+  ## DT: data.table with lat, long
+  # Output file:
+  ## spatialPointsDataFrame
   
-
-
-funRoads <- function(){
-    # This function builds the road database
-    
+  coords <- cbind(Longitude = as.numeric(as.character(DT$location.lng)),
+                  Latitude = as.numeric(as.character(DT$location.lat)))
+  
+  Location.pts <- SpatialPointsDataFrame(coords, dplyr::select(DT, -location.lat, -location.lng),
+                                         proj4string = CRS(p4string.WGS84))
+  shp.pts <- spTransform(Location.pts, CRS(p4string.UK))
+  return(shp.pts)
 }
-
 getPanorama <- function( x, api.key, savePano=TRUE ){
   # find panorama that is closest to this centroid
   api.url <- paste("https://maps.googleapis.com/maps/api/streetview/metadata?size=600x300&location=", paste(rev(coordinates( x )), collapse=",") ,"&key=",api.key, sep="")
@@ -95,8 +101,8 @@ getPanorama <- function( x, api.key, savePano=TRUE ){
 # ================ End Helpers
 
 # This is where stuff really happens 
-getMugShot <- function(toid, s, plot=FALSE, fov.ratio=1, subset.radius=70, endpoints=NA, fov=NA, fDest=NA, savePano=TRUE,
-                       api.key, cores=1, panoID=NULL){
+getMugShot <- function(toid, s, plot=FALSE, fov.ratio=1, subset.radius=70, endpoints=NA, fov=NA,
+                       fDest=NA, savePano=TRUE, api.key, cores=1, shp.panoIds=NULL){
   
   h <- subset(s, TOID == toid)
   if(is.na(endpoints[1,1])){
@@ -119,17 +125,49 @@ getMugShot <- function(toid, s, plot=FALSE, fov.ratio=1, subset.radius=70, endpo
   }
   
   # find panorama that is closest to this centroid
-  pan <- getPanorama( centr.wgs84, api.key, savePano )
-  if( pan[[2]]$status != 'OK') {
-    # exit here if no panorama was found
-    fDest <- paste(photo.dir, toid, "_nopanorama.txt", sep="")
-    cat( pan[[2]]$status , file=fDest)
-    return( pan[[2]]$status )
+  # Do this either based on explicit query of panoId query
+  if (!(is.null(shp.panoIds))){
+    shp.panoIds <- spTransform(shp.panoIds, CRS("+init=epsg:4326"))
+    dt.dists <- data.table(pano_id = shp.panoIds@data$pano_id, dists = distGeo(centr.wgs84@coords, shp.panoIds@coords))
+    dt.dists <- dt.dists[order(dists)]
+    panoIds.near <- dt.dists$pano_id
+    pano.id <- panoIds.near[1]
+    coords.pano <- shp.panoIds[shp.panoIds@data$pano_id == pano.id,]@coords
+    coords.target <- centr.wgs84@coords
+    heading <- bearing(coords.pano, coords.target)
+    # See if there is actually a picture
+    api.metadata <- paste0("https://maps.googleapis.com/maps/api/streetview/metadata?size=640x600&pano=", pano.id, "&key=",api.key)
+    panorama <- unlist(fromJSON(file=api.metadata))
+    panorama <- data.table(t(panorama), TOID = toid)
+    pano.loc <- paste0('~/Dropbox/panorama.db/',toid,'.alt.', pano.i, ".rds")
+    saveRDS(panorama, file=pano.loc)
+    if(panorama$status != 'OK') {
+      # exit here if no panorama was found
+      s.status <- paste0('_', str_replace_all(str_to_lower(panorama$status), ' ', ''), '.txt')
+      fDest <- paste0(photo.dir, toid, s.status)
+      # cat(panorama$status , file=fDest)
+      return(fDest)
+    }
+    # Make consistent with the location based search
+    pano.wgs84 <- readWKT(paste("POINT(",panorama$location.lng, panorama$location.lat,")"), p4s=p4string.WGS84)
+    location <- list(lat=panorama$location.lat, lng=panorama$location.lng)
+    panorama <- list(copyright = panorama$copyright, date=panorama$date, location=location, pano_id=panorama$pano_id, status=panorama$status)
+    pano <- spTransform(pano.wgs84, CRS("+init=epsg:27700"))
+  } else {
+    # Use the centroid and find the nearest pano.id
+    pan <- getPanorama( centr.wgs84, api.key, savePano )
+    if( pan[[2]]$status != 'OK') {
+      # exit here if no panorama was found
+      s.status <- paste0('_', str_replace_all(str_to_lower(panorama$status), ' ', ''), '.txt')
+      fDest <- paste0(photo.dir, toid, s.status)
+      cat( pan[[2]]$status , file=fDest)
+      return(fDest)
+    }
+    pano.wgs84 <- pan[[1]]
+    panorama <- pan[[2]]
+    pano <- spTransform(pano.wgs84, CRS("+init=epsg:27700"))
   }
-  pano.wgs84 <- pan[[1]]
-  panorama <- pan[[2]]
-  pano <- spTransform(pano.wgs84, CRS("+init=epsg:27700"))
-  
+
   # Find out, which direction the camera should aim
   # How much of the building is visible from the pano position?
   # look in each of the 360 degree directions, and see if one can see the house unobstructed
@@ -215,11 +253,12 @@ getMugShot <- function(toid, s, plot=FALSE, fov.ratio=1, subset.radius=70, endpo
     goodangles.index <- median(1:nrow(goodangles))
     midLos <- readWKT( paste("POINT(",paste(goodangles[ goodangles.index , c("lon","lat")], collapse=" "),")", sep=""), p4s = p4string.UK)
     if(plot){
-      midLosLine <- readWKT(paste("LINESTRING(", paste( coordinates(pano), collapse=" ")," , ", paste( coordinates(midLos), collapse=" ") ,")"), p4s=p4string.UK)
+      midLosLine <- readWKT(paste("LINESTRING(", paste( coordinates(pano), collapse=" ")," , ",
+                                  paste( coordinates(midLos), collapse=" ") ,")"), p4s=p4string.UK)
       plot(midLosLine, col="green", lwd=3, add=TRUE)
     }
     midLos.wgs84 <- spTransform(midLos, CRS("+init=epsg:4326"))
-    midLos.string <- paste(rev(coordinates(midLos.wgs84)), collapse=",")
+    #midLos.string <- paste(rev(coordinates(midLos.wgs84)), collapse=",")
     heading <- bearing(pano.wgs84, midLos.wgs84)
     shotLoc <- paste0('https://maps.googleapis.com/maps/api/streetview?size=640x640&pano=',panorama$pano_id,
                       '&heading=', heading, 
@@ -230,13 +269,15 @@ getMugShot <- function(toid, s, plot=FALSE, fov.ratio=1, subset.radius=70, endpo
       fDest <- paste(photo.dir, toid, "_", panorama$pano_id,".jpg", sep="")
     }
     # download the picture from Streetview API
-    streetShot <- download.file(shotLoc, fDest)
+    download.file(shotLoc, fDest)
     return(fDest)
   } else {
     # Cat to empty file so only run onc
     fDest <- paste(photo.dir, toid, "_nolineofsight.txt", sep="")
-    cat("no direct line of sight", file=fDest)
-    print(paste0('NO DIRECT LINE OF SIGHT', fDest))
+    if (is.null(shp.panoIds)){
+      cat("no direct line of sight", file=fDest)
+    }
+    return(fDest)
     }
 }
 funOsm <- function(){
@@ -256,58 +297,118 @@ funOsm <- function(){
     return(osm)
 }
 getPanoIds <- function(s, plot=FALSE, savePano = TRUE, api.key){
+  # Returns 1) panoIds (data.table: full set of pano_id and TOID (nearest match)) 
+  #         2) shp.panoIds (spatialPointsDatqframe, panoid and location)
   panoIds.location <- '~/Dropbox/panorama.db/panoIds.rdata'
   if (file.exists(panoIds.location)){
     load(panoIds.location)
     check <- getPanoIds.check(s, panoIds)
-    n.cores <- max(1, detectCores()-4)
     panoIds.toProcess <- unique(c(check$missingIds, check$errorsIds.OTHER, check$errorsIds.OTHER, check$statusIds.OVER_QUERY_LIMIT))
-    panoIds.new <- mclapply(panoIds.toProcess, function(x) getPanoIds.run(x, s, api.key), mc.cores = n.cores)
-    check.new <- getPanoIds.check(s, panoIds.new)
-    save(panoIds.new, file='~/Dropbox/panorama.db/panoIds.new.rdata')
   } else {
-    panoIds.toProcess<- s@data$TOID
-    panoIds <- mclapply(panoIds.toProcess, function(x) getPanoIds.run(x, s, api.key), mc.cores = (detectCores()-4))
-    
+    panoIds.toProcess <- s@data$TOID
+    panoIds <- data.table(copyright = as.character(),
+                          date = as.character(),
+                          location.lat = as.character(),
+                          location.lng = as.character(),
+                          pano_id = as.character(),
+                          status = as.character(),
+                          TOID = as.character(),
+                          error.message = as.character())
+    check <- getPanoIds.check(s, panoIds)
   }
-  # panos <- lapply(panos.bad, function(x) file.remove(paste0('~/Dropbox/panorama.db/',x,".rds")))
-  cat('Processing', length(panoIds.toProcess), 'addresses')
-   panoIds <- rbindlist(panos, use.names = TRUE, fill = TRUE)
-  save(panoIds, file='~/Dropbox/panorama.db/panoIds.rdata')
-  return(panoIds)
-  # Find unique panoIds
+  while(length(unlist(panoIds.toProcess))>0){
+    n.cores <- max(1, detectCores()-4)
+    n.cores <- min(length(panoIds.toProcess),n.cores)
+    panoIds <- panoIds[!(TOID %in% panoIds.toProcess)]
+    cat('Processing', length(panoIds.toProcess), 'addresses')
+    panoIds.new <- mclapply(panoIds.toProcess, function(x) getPanoIds.run(x, s, api.key), mc.cores=n.cores)
+    panoIds.new.dt.ids <- which(unlist(sapply(panoIds.new, function(x) class(x)[1]!='try-error', simplify=TRUE)))
+    panoIds.new <- rbindlist(panoIds.new[panoIds.new.dt.ids], use.names = TRUE, fill=TRUE)
+    check.new <- getPanoIds.check(s, panoIds.new)
+    panoIds.new.good <- panoIds.new[(TOID %in% c(check.new$statusIds.OK, check.new$statusIds.ZERO_RESULTS))]
+    panoIds <- rbindlist(list(panoIds, panoIds.new.good), use.names = TRUE, fill=TRUE)
+    panoIds <- unique(panoIds[, names(panoIds), with=FALSE])
+    check<- getPanoIds.check(s, panoIds)
+    cat(str(check))
+    panoIds.toProcess <- unique(unlist(check)[!(unlist(check) %in% c(check$statusIds.OK, check$statusIds.ZERO_RESULTS))])
+  }
+  # Create shapes
+  panoIds.unique <- unique(panoIds[status=='OK', .(location.lat, location.lng, pano_id)])
+  shp.panoIds <- coords2points(panoIds.unique, p4string.WGS84, p4string.UK)
+  l.panoIds <- list(panoIds=panoIds, shp.panoIds=shp.panoIds)
+  #str(l.panoIds)
+  return(l.panoIds)
 }
 getPanoIds.check <-function(s, panoIds){
-      # Error check panoIds
-    check <- list()
-    check$missingIds <- s$TOID[!(s$TOID %in% panoIds$shp.id)]
-    # Error message
-    if (length(which(names(panoIds)=='error_message')>0)) {
-      errors <- panoIds[!is.na(error_message)]
-      check$errorsIds.QUOTA <- errors$shp.id[which(str_detect(errors$error_message, 'quota'))]
-      check$errorsIds.OTHER <- errors$shp.id[which(!str_detect(errors$error_message, 'quota'))]
-    } else {
-      check$errorsIds.QUOTA <- ''
-      check$errorsIds.OTHER <- ''
+  # Error check panoIds
+  check <- list()
+  check$missingIds <- s$TOID[!(s$TOID %in% panoIds$TOID)]
+  error.ids <- FALSE
+  # Error message
+  if (length(which(names(panoIds)=='error_message')>0)) {
+    errors <- panoIds[!is.na(error_message)]
+    if (nrow(errors)>0){
+      check$errorsIds.QUOTA <- unique(errors$TOID[which(str_detect(errors$error_message, 'quota'))])
+      check$errorsIds.OTHER <- unique(errors$TOID[which(!str_detect(errors$error_message, 'quota'))])
+      error.ids <- TRUE
     }
-    # Bad Status
-    status.names <- unique(panoIds$status)[!unique(panoIds$status) %in% 'OK']
-    status.ids <- sapply(status.names, function(x) panoIds[status==x]$shp.id)
+  } 
+  if (error.ids==FALSE){
+    check$errorsIds.QUOTA <- NULL
+    check$errorsIds.OTHER <- NULL
+  }
+  # Bad Status
+  status.names <- unique(panoIds$status)
+  if (length(status.names)>1){
+    status.ids <- sapply(status.names, function(x) unique(panoIds[status==x]$TOID))
     names(status.ids) <- paste0('statusIds.', names(status.ids))
-    check <- c(check, status.ids)
-    cat(str(check))
-    return(check)
+  } else {
+    status.ids <- unique(panoIds[status==status.names]$TOID)
+    names(status.ids) <- paste0('statusIds.',  status.names)
+  }
+  check <- c(check, status.ids)
+  return(check)
 }
 getPanoIds.run <-function(toid, s, api.key){
-    s.i <- s[s@data$TOID==toid,]
-    pano.loc <- paste0('~/Dropbox/panorama.db/',toid,".rds")
-    centr <- gCentroid(s.i)
-    centr.wgs84 <- spTransform(centr, CRS("+init=epsg:4326"))
-    api.url <- paste("https://maps.googleapis.com/maps/api/streetview/metadata?size=600x300&location=",
-                     paste(rev(coordinates(centr.wgs84)), collapse=",") ,"&key=",api.key, sep="")
-    panorama <- unlist(fromJSON(file=api.url))
-    panorama <- data.table(t(panorama), TOID = toid)
-    saveRDS(panorama, file=pano.loc)
-    return(panorama)
+  s.i <- s[s@data$TOID==toid,]
+  pano.loc <- paste0('~/Dropbox/panorama.db/',toid,".rds")
+  centr <- gCentroid(s.i)
+  centr.wgs84 <- spTransform(centr, CRS("+init=epsg:4326"))
+  api.url <- paste("https://maps.googleapis.com/maps/api/streetview/metadata?size=600x300&location=",
+                   paste(rev(coordinates(centr.wgs84)), collapse=",") ,"&key=",api.key, sep="")
+  panorama <- unlist(fromJSON(file=api.url))
+  panorama <- data.table(t(panorama), TOID = toid)
+  saveRDS(panorama, file=pano.loc)
+  return(panorama)
 }
-
+funPhotos.check <- function(photo.dir, tmp.dir){
+  # After photo batch is run, examine the quality of the pictures
+  photos <- list.files(photo.dir)
+  l.check <- list()
+  l.check$greenery <- fread(paste0(tmp.dir, 'greeneryIds.csv')) # From tensorflow
+  l.check$greenery$error.type <- 'greenery'
+  l.check$greenery <- l.check$greenery[, fDest:=paste0(TOID, '_', panoid, '.jpg')]
+  # Labels (return query info from streetview)
+  labels.index <- which(str_detect(photos, regex('(?<=\\_)[A-z]{1,}\\.txt')))
+  labels.names <- unique(str_extract(photos[labels.index], regex('(?<=\\_)[A-z]{1,}(?=\\.txt)')))
+  photos.labels <- photos[labels.index]
+  # Find 
+  if (length(labels.names)>1){
+    labels.ids <- sapply(labels.names,
+                         function(x) na.omit(str_extract(photos.labels, regex(paste0('(?<=^)[0-9]{1,}(?=\\_', x,')'), perl=TRUE))))
+    fDests <- sapply(labels.names,
+                     function(x) photos.labels[str_detect(photos.labels, regex(paste0('(?<=^)[0-9]{1,}(?=\\_', x,')'), perl=TRUE))])
+    labels.dt <- lapply(labels.ids, function(x) data.table(TOID=unlist(x), panoid=NA))
+    labels.dt <- mapply(function(x,y) data.table(x, error.type=y), labels.dt, labels.names, SIMPLIFY=FALSE)
+    labels.dt <- mapply(function(x,y) data.table(x, fDest = unlist(y)), labels.dt, fDests, SIMPLIFY=FALSE)
+    }
+  if (length(labels.names)==1){
+    labels.dt <- data.table(TOID=na.omit(str_extract(photos.labels, regex(paste0('(?<=^)[0-9]{1,}(?=\\_', labels.names,')'), perl=TRUE))),
+                            panoid = NA,
+                            error.type=labels.names,
+                            fDest = photos.labels[str_detect(photos.labels, regex(paste0('(?<=^)[0-9]{1,}(?=\\_', labels.names,')'), perl=TRUE))])
+  }
+  l.check <- c(l.check, labels.dt)
+  str(l.check)
+ return(l.check)
+}

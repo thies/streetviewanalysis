@@ -7,7 +7,7 @@ if (user.name == 'ejohnso4') { # Laptop
   source("~/GitHub/streetviewanalysis/r/harvestImages/functions_mugshots.R")
   source("~/Dropbox/api.key.R")
   photo.dir <- "~/Dropbox/cambridge/"
-  photo.second.dir <- '~/Dropbox/cambridge.second/'
+  photo.archive.dir <- '~/Dropbox/cambridge.archive/'
   pano.dir <- "~/Dropbox/panoramas/"
   shp.file <- "~/Dropbox/shp/buildings_with_centroids_area.shp"
   osm.dir <- "/Users/ejohnso4/Dropbox/shp/osm.cambridge/cambridgeshire-latest-free.shp/"
@@ -18,7 +18,7 @@ if (user.name == 'erik'){ # Server
   source("~/Dropbox/git/streetviewanalysis/r/harvestImages/functions_mugshots.R")
   source("~/Dropbox/api.key.R")
   photo.dir <- "~/Dropbox/cambridge/"
-  photo.second.dir <- "~/Dropbox/cambridge.second/"
+  photo.archive.dir <- "~/Dropbox/cambridge.archive/"
   pano.dir <- "~/Dropbox/panoramas/"
   shp.file <- "~/Dropbox/shp/buildings_with_centroids_area.shp"
   tmp.dir <- '~/Dropbox/tmp/'
@@ -31,50 +31,62 @@ if (!user.name %in% c('ejohnso4', 'erik')){ # Thies
   source("~/.api.key.R")
   # api.key <- ""
   photo.dir <- "photos/cambridge/"
-  photo.second.dir <- 'photos/cambridge.second/'
+  photo.archive.dir <- 'photos/cambridge.archive/'
   pano.dir <- "streetview/panoramas/"
   shp.file <- "shp/buildings_with_centroids_area.shp"
   osm.dir <- "shp/osm.cambridge/cambridgeshire-latest-free.shp/"
   tmp.dir <- 'tmp/'
 }
 osm.location <- paste0(osm.dir, 'osm.cambridge.rdata')
+if (!(dir.exists(photo.archive.dir))) dir.create(photo.archive.dir)
+
 # load shapefile
 s <- shapefile(shp.file)
 
 # get an intital set of 360 endpoints in a 50m radius
 ep <- createEndpoints(50, 360)
 
-samp <- subset(s, area > 30 & area < 210)
-
+# Check for 'bad' set
 # loop through photos with bad panorama
-photos <- list.files(photo.dir)
-l.bad <- list()
-labels.index <- which(str_detect(photos, regex('(?<=\\_)[A-z]{1,}\\.txt')))
+photos.check <- funPhotos.check(photo.dir, tmp.dir)
+l.panoIds <- getPanoIds(s, api.key = api.key)
 
-l.bad$labels <- data.table(TOID = str_extract(photos[labels.index], regex('(?<=^).+(?=\\_)', perl=TRUE)),
-                           panoId = str_extract(photos[labels.index], regex('(?<=\\_)[A-z]{1,}\\.txt')))
-l.bad$greenery <- fread(paste0(tmp.dir, 'greeneryIds.csv'))
-
-# Second swipe directory
-if (!(dir.exists(photo.second.dir))) dir.create(photo.second.dir)
-
-# Retrieve/create panoids
-
-
-while(TRUE){
-  # get a list of all pictures that have already been taken
-  done <- list.files( photo.dir )
-  # remove the pano information
-  done <- gsub("_.+$","",done, perl=TRUE)
-  
-  # only keep those that have not been downloaded yet
-  samp <- samp[ ! samp$TOID %in% done,]
-  
-  # sample a few hundred
-  sampl <- samp[sample(1:nrow(samp), 100, replace=FALSE),]
-  for(i in 1:nrow(sampl)){
-    print(paste("Trying: ", sampl$TOID[i]))
-    print( getMugShot(sampl$TOID[i], s, plot=FALSE, fov.ratio=1.3, endpoints=ep, api.key=api.key))
+for(photo.check in photos.check){
+  for(i in 1:nrow(photo.check)){
+    panoid <- NA
+    toid <- photo.check[i]$TOID
+    error.type <- photo.check[i]$error.type
+    panoid <- photo.check[i]$panoid
+    cat("Trying: ", toid, error.type, 'error', '\n')
+    try <- 0
+    # Search for already cleaned photo
+    photos.base <- list.files(photo.dir)
+    photos.remove.bad <- photos.base[!(photos.base %in% photo.check[i]$fDest)]
+    photos.replaced <- which(str_detect(photos.remove.bad, regex(paste0('(?<=^)', toid, '\\_'), perl=TRUE)))
+    if (length(photos.remove.bad[photos.replaced])>0){
+      good.pic <- TRUE
+    } else {
+      good.pic <- FALSE
+    }
+    while (try < 4 & good.pic == FALSE){
+      cat('try:', try)
+      if (!is.na(panoid) | try > 0){
+        # If there is a starting panoId remove (since it was bad)
+        shp.panoIds <- l.panoIds$shp.panoIds[!(l.panoIds$shp.panoIds@data$pano_id %in% panoid),]
+      } else {
+        shp.panoIds <- l.panoIds$shp.panoIds
+      }
+      mugShot <- try(getMugShot(toid=toid, s, plot=FALSE, fov.ratio=1.3, endpoints=ep, api.key=api.key, shp.panoIds=shp.panoIds))
+      cat(mugShot, '\n')
+      good.pic <- !str_detect(mugShot, regex(paste0('(', paste0(names(photos.check), collapse='|'), ')'), perl=TRUE))
+      # Delete the original (poor picture)
+      if (good.pic){
+        cat('Copy ', photo.check[i]$fDest, 'to', photo.archive.dir, 'and replacing with', mugShot, '\n')
+        f.copy <- file.copy(paste0(photo.dir, photo.check[i]$fDest), paste0(photo.archive.dir, photo.check[i]$fDest))
+        f.remove <- file.remove(paste0(photo.dir, photo.check[i]$fDest))
+      }
+      try <- try+1
+    }
   }
   # and do this again...
 }
