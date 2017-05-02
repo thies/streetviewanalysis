@@ -256,32 +256,58 @@ funOsm <- function(){
     return(osm)
 }
 getPanoIds <- function(s, plot=FALSE, savePano = TRUE, api.key){
-    s.ids <- s@data$TOID
-    # panos <- lapply(panos.bad, function(x) file.remove(paste0('~/Dropbox/panorama.db/',x,".rds")))
-    panos <- mclapply(s.ids, function(x) getPanoIds.run(x, s, api.key), mc.cores = (detectCores()-2))
-    panoIds <- rbindlist(panos, use.names = TRUE, fill = TRUE)
-    save(panosIds, file='~/Dropbox/panorama.db/panoIds.rdata')
-    return(panoIds)
-    # Find unique panoIds
+  panoIds.location <- '~/Dropbox/panorama.db/panoIds.rdata'
+  if (file.exists(panoIds.location)){
+    load(panoIds.location)
+    check <- getPanoIds.check(s, panoIds)
+    n.cores <- max(1, detectCores()-4)
+    panoIds.toProcess <- unique(c(check$missingIds, check$errorsIds.OTHER, check$errorsIds.OTHER, check$statusIds.OVER_QUERY_LIMIT))
+    panoIds.new <- mclapply(panoIds.toProcess, function(x) getPanoIds.run(x, s, api.key), mc.cores = n.cores)
+    check.new <- getPanoIds.check(s, panoIds.new)
+    save(panoIds.new, file='~/Dropbox/panorama.db/panoIds.new.rdata')
+  } else {
+    panoIds.toProcess<- s@data$TOID
+    panoIds <- mclapply(panoIds.toProcess, function(x) getPanoIds.run(x, s, api.key), mc.cores = (detectCores()-4))
+    
+  }
+  # panos <- lapply(panos.bad, function(x) file.remove(paste0('~/Dropbox/panorama.db/',x,".rds")))
+  cat('Processing', length(panoIds.toProcess), 'addresses')
+   panoIds <- rbindlist(panos, use.names = TRUE, fill = TRUE)
+  save(panoIds, file='~/Dropbox/panorama.db/panoIds.rdata')
+  return(panoIds)
+  # Find unique panoIds
+}
+getPanoIds.check <-function(s, panoIds){
+      # Error check panoIds
+    check <- list()
+    check$missingIds <- s$TOID[!(s$TOID %in% panoIds$shp.id)]
+    # Error message
+    if (length(which(names(panoIds)=='error_message')>0)) {
+      errors <- panoIds[!is.na(error_message)]
+      check$errorsIds.QUOTA <- errors$shp.id[which(str_detect(errors$error_message, 'quota'))]
+      check$errorsIds.OTHER <- errors$shp.id[which(!str_detect(errors$error_message, 'quota'))]
+    } else {
+      check$errorsIds.QUOTA <- ''
+      check$errorsIds.OTHER <- ''
+    }
+    # Bad Status
+    status.names <- unique(panoIds$status)[!unique(panoIds$status) %in% 'OK']
+    status.ids <- sapply(status.names, function(x) panoIds[status==x]$shp.id)
+    names(status.ids) <- paste0('statusIds.', names(status.ids))
+    check <- c(check, status.ids)
+    cat(str(check))
+    return(check)
 }
 getPanoIds.run <-function(toid, s, api.key){
     s.i <- s[s@data$TOID==toid,]
     pano.loc <- paste0('~/Dropbox/panorama.db/',toid,".rds")
-    if (file.exists(pano.loc)){
-      panorama <- readRDS(pano.loc)
-      if (panorama$status=='OVER_QUERY_LIMIT') file.remove(pano.loc)
-    } else {
-      centr <- gCentroid(s.i)
-      centr.wgs84 <- spTransform(centr, CRS("+init=epsg:4326"))
-      api.url <- paste("https://maps.googleapis.com/maps/api/streetview/metadata?size=600x300&location=",
-                       paste(rev(coordinates(centr.wgs84)), collapse=",") ,"&key=",api.key, sep="")
-      panorama <- unlist(fromJSON(file=api.url))
-      panorama <- data.table(t(panorama), TOID = toid)
-      if (which(s@data$TOID==toid) %% 100 == 0){
-        cat(paste(toid,  round(which(s@data$TOID==toid)/length(s),4)),sep='\n')
-      }
-      saveRDS(panorama, file=pano.loc)
-    }
+    centr <- gCentroid(s.i)
+    centr.wgs84 <- spTransform(centr, CRS("+init=epsg:4326"))
+    api.url <- paste("https://maps.googleapis.com/maps/api/streetview/metadata?size=600x300&location=",
+                     paste(rev(coordinates(centr.wgs84)), collapse=",") ,"&key=",api.key, sep="")
+    panorama <- unlist(fromJSON(file=api.url))
+    panorama <- data.table(t(panorama), TOID = toid)
+    saveRDS(panorama, file=pano.loc)
     return(panorama)
 }
 
