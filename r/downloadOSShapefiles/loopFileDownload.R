@@ -1,7 +1,9 @@
-source("~/.ravenLogin.R")
+source("/home/thies/.ravenLogin.R")
 source("/home/thies/research/streetviewanalysis/r/downloadOSShapefiles/functionsEdinaDownload.R")
 
 library('RSelenium')
+try( remDr$close() )
+
 ePrefs <- makeFirefoxProfile(
   list(
     browser.download.dir = "/home/seluser/Downloads",
@@ -13,6 +15,21 @@ remDr <- remoteDriver(remoteServerAddr = "localhost", extraCapabilities = ePrefs
 remDr$open()
 # login at Raven, both needed for email and edina
 loginRaven( remDr, ravenLogin[[1]],ravenLogin[[2]])
+
+# login at edina
+remDr$navigate("http://edina.ac.uk/Login/digimap")
+remDr$screenshot(display = TRUE)
+login <- remDr$findElement(using = "css", "[class = 'as-input']")
+#login$getElementAttribute("outerHTML")[[1]]
+login$sendKeysToElement(list( "University of Cambridge", key = "enter"))
+remDr$screenshot(display = TRUE)
+l <- remDr$findElement(using="partial link text", "University of Cambridge")
+l$clickElement()
+remDr$screenshot(display = TRUE)
+
+
+
+
   
 remDr$navigate("https://webmail-1.hermes.cam.ac.uk/?_task=mail&_mbox=done")
 remDr$screenshot(display = TRUE)
@@ -22,25 +39,15 @@ remDr$screenshot(display = TRUE)
 l <- remDr$findElement(using="partial link text", "Click here to login using Raven")
 l$clickElement()
 remDr$screenshot(display = TRUE)
+
+
 remDr$navigate("https://webmail-1.hermes.cam.ac.uk/?_task=mail&_mbox=done")
 remDr$screenshot(display = TRUE)
-
 l <- remDr$findElements(using="partial link text", "Your Digimap Data Order")
 # get URLs
 mailUrls <- sapply( l, function(x){ return( x$getElementAttribute('href')) } )
 
-# login at edina
-remDr$navigate("http://edina.ac.uk/Login/digimap")
-remDr$screenshot(display = TRUE)
-login <- remDr$findElement(using = "css", "[class = 'as-input']")
-#login$getElementAttribute("outerHTML")[[1]]
 
-login$sendKeysToElement(list( "University of Cambridge", key = "enter"))
-remDr$screenshot(display = TRUE)
-
-l <- remDr$findElement(using="partial link text", "University of Cambridge")
-l$clickElement()
-remDr$screenshot(display = TRUE)
 
 
 for (u in mailUrls){
@@ -61,7 +68,7 @@ for (u in mailUrls){
     dlink[[1]]$clickElement()
     remDr$screenshot(display = TRUE)
     print(paste(c("Downloading:",orderId)))
-    Sys.sleep(30) 
+    Sys.sleep(20) 
   }  else {
     print(paste(c("already done",orderId)))
   }

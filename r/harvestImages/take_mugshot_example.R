@@ -22,6 +22,6 @@ ep <- createEndpoints(50, 360)
 # - fov.ratio: how much wider than the exact fan should the picture be taken?
 # - endpoints: preset it to save a little time when taking many shots
 # - savePano: TRUE
-getMugShot("0001000010142211", s, fov.ratio=1.2, endpoints=ep, plot=TRUE, savePano=TRUE, api.key = api.key)
+getMugShot("1000002500677754", s, fov.ratio=1.2, endpoints=ep, plot=TRUE, savePano=TRUE, api.key = api.key)
 # ==================================================
 
